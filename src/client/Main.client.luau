@@ -130,6 +130,60 @@ player:GetAttributeChangedSignal("Size"):Connect(function()
 end)
 hud:setSize(mySize())
 
+-- The server resizes us but never moves us (that would fight our own movement), so we keep
+-- our own feet on the ground: if we ever end up sunk below standing height, pop back up.
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Include
+
+local function keepFeetOnGround()
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local land = workspace:FindFirstChild("Land")
+	local ground = land and land:FindFirstChild("Ground")
+	if not (hum and root and ground) or hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Swimming then
+		return
+	end
+	groundParams.FilterDescendantsInstances = { ground }
+	local origin = Vector3.new(root.Position.X, math.max(root.Position.Y, 0) + 20, root.Position.Z)
+	local hit = workspace:Raycast(origin, Vector3.new(0, -400, 0), groundParams)
+	if not hit then
+		return
+	end
+	local standing = hit.Position.Y + hum.HipHeight + root.Size.Y / 2
+	if root.Position.Y < hit.Position.Y + (standing - hit.Position.Y) * 0.6 then
+		char:PivotTo(char:GetPivot() + Vector3.new(0, standing - root.Position.Y, 0))
+		root.AssemblyLinearVelocity *= Vector3.new(1, 0, 1)
+	end
+end
+
+task.spawn(function()
+	while true do
+		keepFeetOnGround()
+		task.wait(0.1)
+	end
+end)
+
+-- Rainbow flash on anyone who just grew.
+local function watchCharacter(char: Model)
+	char:GetAttributeChangedSignal("GrowPulse"):Connect(function()
+		Effects.rainbowBody(char)
+		if char == player.Character then
+			task.defer(keepFeetOnGround)
+		end
+	end)
+end
+local function watchPlayer(p: Player)
+	p.CharacterAdded:Connect(watchCharacter)
+	if p.Character then
+		watchCharacter(p.Character)
+	end
+end
+Players.PlayerAdded:Connect(watchPlayer)
+for _, p in Players:GetPlayers() do
+	watchPlayer(p)
+end
+
 player:GetAttributeChangedSignal("Towers"):Connect(function()
 	hud:setTrophies(player:GetAttribute("Towers") or 0)
 end)

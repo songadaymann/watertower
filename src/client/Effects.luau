@@ -120,6 +120,66 @@ function Effects.stars(from: Vector3, count: number, starSize: number, onArrive:
 	end
 end
 
+local RAINBOW = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 160, 50)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 230, 70)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(90, 210, 90)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(70, 150, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 90, 240)),
+})
+
+-- Someone just grew: their whole body flashes through the rainbow for a second, with sparkles.
+function Effects.rainbowBody(char: Model, duration: number?)
+	local dur = duration or 1
+	local old = char:FindFirstChild("RainbowGlow")
+	if old then
+		old:Destroy()
+	end
+	local glow = Instance.new("Highlight")
+	glow.Name = "RainbowGlow"
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.FillTransparency = 0.1
+	glow.OutlineColor = Color3.new(1, 1, 1)
+	glow.Adornee = char
+	glow.Parent = char
+
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if root then
+		local scale = char:GetScale()
+		local at = Instance.new("Attachment")
+		at.Parent = root
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = SPARKLE
+		pe.Enabled = false
+		pe.Color = RAINBOW
+		pe.LightEmission = 1
+		pe.Size = NumberSequence.new({ kp(0, 0.6 * scale), kp(1, 0) })
+		pe.Speed = NumberRange.new(4 * scale, 9 * scale)
+		pe.Lifetime = NumberRange.new(0.5, 0.9)
+		pe.SpreadAngle = Vector2.new(180, 180)
+		pe.Drag = 3
+		pe.Parent = at
+		pe:Emit(30)
+		Debris:AddItem(at, 1.5)
+	end
+
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		if t >= dur or not glow.Parent then
+			conn:Disconnect()
+			glow:Destroy()
+			return
+		end
+		glow.FillColor = Color3.fromHSV((t * 2) % 1, 0.7, 1)
+		local fade = math.clamp((t - (dur - 0.35)) / 0.35, 0, 1)
+		glow.FillTransparency = 0.1 + 0.9 * fade
+		glow.OutlineTransparency = fade
+	end)
+end
+
 local wobbling = {}
 
 -- Shake something that's still too big to smash.

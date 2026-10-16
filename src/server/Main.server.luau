@@ -57,6 +57,10 @@ end
 
 ---------------------------------------------------------------- Characters
 
+-- When each player's next growth pop is due (see popGrow).
+local POP_DELAY = 0.45
+local popAt: { [Player]: number } = {}
+
 local function applySize(char: Model, size: number)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hum then
@@ -120,6 +124,11 @@ end
 local function onPlayerAdded(player: Player)
 	player:SetAttribute("Size", Config.START_SIZE)
 	player:SetAttribute("Towers", 0)
+	player:GetAttributeChangedSignal("Size"):Connect(function()
+		if not popAt[player] then
+			popAt[player] = os.clock() + POP_DELAY
+		end
+	end)
 	player.CharacterAdded:Connect(function(char)
 		setupCharacter(player, char)
 	end)
@@ -129,34 +138,39 @@ local function onPlayerAdded(player: Player)
 	end
 end
 
-Players.PlayerRemoving:Connect(Smash.forget)
+-- Grow in pops: a moment after a smash (when the stars reach you), snap to the new size.
+-- Resizing every frame kept layered clothing invisible while it re-fit, and moving a
+-- player-controlled character from the server fights its own movement. So the server only
+-- resizes, and each player's client keeps its own feet on the ground.
+local function popGrow(player: Player)
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (hum and hum.Health > 0 and char:GetAttribute("ScaleReady")) then
+		return
+	end
+	local target = player:GetAttribute("Size") or Config.START_SIZE
+	if math.abs(target - char:GetScale()) < 1e-3 then
+		return
+	end
+	char:ScaleTo(target)
+	applySize(char, target)
+	-- Clients flash a rainbow on whoever just grew.
+	char:SetAttribute("GrowPulse", (char:GetAttribute("GrowPulse") or 0) + 1)
+end
 
--- Smoothly grow each character toward its Size.
-RunService.Heartbeat:Connect(function(dt)
-	for _, player in Players:GetPlayers() do
-		local char = player.Character
-		if char and char:GetAttribute("ScaleReady") then
-			local hum = char:FindFirstChildOfClass("Humanoid")
-			local root = char:FindFirstChild("HumanoidRootPart")
-			if hum and root and hum.Health > 0 then
-				local target = player:GetAttribute("Size") or 1
-				local cur = char:GetScale()
-				if math.abs(target - cur) > 1e-3 then
-					local new = cur + (target - cur) * math.min(1, dt * 6)
-					if math.abs(target - new) < 0.005 then
-						new = target
-					end
-					local before = hum.HipHeight + root.Size.Y / 2
-					char:ScaleTo(new)
-					local after = hum.HipHeight + root.Size.Y / 2
-					if after > before then
-						char:PivotTo(char:GetPivot() + Vector3.new(0, after - before, 0))
-					end
-					applySize(char, new)
-				end
-			end
+RunService.Heartbeat:Connect(function()
+	local now = os.clock()
+	for player, t in popAt do
+		if now >= t then
+			popAt[player] = nil
+			popGrow(player)
 		end
 	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	popAt[player] = nil
+	Smash.forget(player)
 end)
 
 -- Check what everyone is touching ten times a second.
