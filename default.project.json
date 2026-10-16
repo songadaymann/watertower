@@ -1,0 +1,28 @@
+{
+  "name": "WaterTower",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "WaterTowerShared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "WaterTowerServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "WaterTowerClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    }
+  }
+}
